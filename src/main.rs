@@ -6,6 +6,7 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_systems(Startup, setup)
+        .add_systems(Update, just_input)
         .run();
 }
 
@@ -21,4 +22,10 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         texture: asset_server.load("sprite.png"),
         ..Default::default()
     });
+}
+
+fn just_input(input: Res<Input<KeyCode>>) {
+    // if let input.pressed(a) = input {
+    println!("{:?}", input)
+    // }
 }
