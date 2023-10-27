@@ -1,13 +1,14 @@
 use std::io::Write;
 use bevy::prelude::*;
-use rand::Rng;
+use rand::{thread_rng, Rng};
 #[derive(Component, Clone, Copy)]
 struct Player;
 
 #[derive(Component)]
 struct Particle{
     x: f32,
-    y: f32
+    y: f32,
+    life: f32
 }
 
 fn main() {
@@ -36,6 +37,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
 }
 
 fn player_movement(
+    mut commands: Commands,
     mut query: Query<&mut Transform, With<Player>>,
     input: Res<Input<KeyCode>>,
     time: Res<Time>
@@ -45,24 +47,43 @@ fn player_movement(
     if input.pressed(KeyCode::Right)  { transform.translation.x += 3. }
     if input.pressed(KeyCode::Down)   { transform.translation.y -= 3. }
     if input.pressed(KeyCode::Up)     { transform.translation.y += 3. }
+
+    
+    if input.pressed(KeyCode::Space) { 
+        println!("particle spawn! * 100");
+        for i in 0..100{
+            let mut rng = thread_rng();
+            let (rx, ry): (f32, f32) = (rng.gen_range(0.0..10.0) - 5., rng.gen_range(0.0..10.0) - 5.);
+            commands.spawn(SpriteBundle {
+                sprite: Sprite {
+                    color: Color::Rgba { red: 0., green: 0., blue: 0., alpha: 0.5 },
+                    custom_size: Some(Vec2::new(10., 10.)),
+                    
+                    ..Default::default()
+                },
+                transform: Transform{
+                    translation: Vec3::new(transform.translation.x, transform.translation.y, 0.),
+                    ..Default::default()
+                },  
+                ..Default::default()
+            }).insert(Particle{x: rx, y: ry, life: (rx.abs() + ry.abs()) * 1000.});
+        }
+     }
 }
 
 
 fn particle_movement(
-    commands: Commands,
-    mut query: Query<&mut Transform, With<Particle>>,
+    mut query: Query<(&mut Transform, &mut Particle), With<Particle>>,
     input: Res<Input<KeyCode>>,
     time: Res<Time>
 ) {
-    if input.pressed(KeyCode::Space) { 
-        let rng = rand::thread_rng();
-        let (rx, ry) = (rng::gen_range(0.0..10.0), rng::gen_range(0.0..10.0))
-        commands.spawn(Sprite {
-
-        }).insert(Particle{x: rx, y: ry})
-     }
-    for transform in &mut query{
-
+    for (mut transform, mut particle) in &mut query{
+        transform.translation.x += particle.x;
+        transform.translation.y += particle.y;
+        particle.life -= 1.;
+        if particle.life <= 1. {
+            drop(particle)
+        }
     }
     // if input.pressed(KeyCode::Space)  {  }
 }
