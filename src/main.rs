@@ -1,15 +1,26 @@
-use std::io::Write;
+use std::time::Duration;
+
 use bevy::prelude::*;
 use rand::{thread_rng, Rng};
-#[derive(Component, Clone, Copy)]
-struct Player;
+#[derive(Component, Clone)]
+struct Player{
+    potion_cooldown: Timer
+}
 
 #[derive(Component)]
 struct Particle{
     x: f32,
     y: f32,
-    life: f32
+    life: Timer
 }
+
+#[derive(Component)]
+struct Potion{
+    boom: Timer,
+    x: f32,
+    y: f32
+}
+
 
 fn main() {
     App::new()
@@ -17,6 +28,9 @@ fn main() {
         .add_systems(Startup, setup)
         .add_systems(Update, player_movement)
         .add_systems(Update, particle_movement)
+        .add_systems(Update, particle_lifetime)
+        .add_systems(Update,  potion_movement)
+        .add_systems(Update, potion_boom)
         .run();
 }
 
@@ -33,57 +47,113 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             ..Default::default()
         },
         ..Default::default()
-    }).insert(Player);
+    }).insert(Player {
+        potion_cooldown: Timer::from_seconds(2., TimerMode::Once)
+    });
 }
 
 fn player_movement(
     mut commands: Commands,
-    mut query: Query<&mut Transform, With<Player>>,
+    mut query: Query<(&mut Transform, &mut Player), With<Player>>,
     input: Res<Input<KeyCode>>,
     time: Res<Time>
 ) {
-    let mut transform = query.iter_mut().next().unwrap();
+    let (mut transform, mut player) = query.iter_mut().next().unwrap();
     if input.pressed(KeyCode::Left)   { transform.translation.x -= 3. }
     if input.pressed(KeyCode::Right)  { transform.translation.x += 3. }
     if input.pressed(KeyCode::Down)   { transform.translation.y -= 3. }
     if input.pressed(KeyCode::Up)     { transform.translation.y += 3. }
-
-    
-    if input.pressed(KeyCode::Space) { 
+    player.potion_cooldown.tick(time.delta());
+    if input.pressed(KeyCode::Space) && player.potion_cooldown.finished() { 
+        player.potion_cooldown = Timer::from_seconds(2., TimerMode::Once);
         println!("particle spawn! * 100");
-        for i in 0..100{
-            let mut rng = thread_rng();
-            let (rx, ry): (f32, f32) = (rng.gen_range(0.0..10.0) - 5., rng.gen_range(0.0..10.0) - 5.);
-            commands.spawn(SpriteBundle {
-                sprite: Sprite {
-                    color: Color::Rgba { red: 0., green: 0., blue: 0., alpha: 0.5 },
-                    custom_size: Some(Vec2::new(10., 10.)),
-                    
-                    ..Default::default()
-                },
-                transform: Transform{
-                    translation: Vec3::new(transform.translation.x, transform.translation.y, 0.),
-                    ..Default::default()
-                },  
+        commands.spawn(SpriteBundle {
+            sprite: Sprite{
+                color: Color::Rgba { red: 1., green: 0., blue: 0., alpha: 1. },
+                custom_size: Some(Vec2::new(10., 10.)),
                 ..Default::default()
-            }).insert(Particle{x: rx, y: ry, life: (rx.abs() + ry.abs()) * 1000.});
-        }
+            },
+            ..Default::default()
+        }).insert(Potion {
+            boom: Timer::from_seconds(1., TimerMode::Once),
+            x: transform.translation.x,
+            y: transform.translation.y
+        });
      }
 }
 
 
 fn particle_movement(
     mut query: Query<(&mut Transform, &mut Particle), With<Particle>>,
-    input: Res<Input<KeyCode>>,
-    time: Res<Time>
 ) {
-    for (mut transform, mut particle) in &mut query{
+    for (mut transform, particle) in &mut query{
         transform.translation.x += particle.x;
         transform.translation.y += particle.y;
-        particle.life -= 1.;
-        if particle.life <= 1. {
-            drop(particle)
+    }
+    // if input.pressed(KeyCode::Space)  {  }
+}
+
+
+fn particle_lifetime(
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut Particle), With<Particle>>,
+    time: Res<Time>
+) {
+    for (particle_entity, mut particle) in &mut query{
+        particle.life.tick(time.delta());
+
+        if particle.life.finished() {
+            commands.entity(particle_entity).despawn();
         }
     }
     // if input.pressed(KeyCode::Space)  {  }
+}
+
+
+fn potion_movement(
+    mut query: Query<(&mut Transform, &mut Potion), With<Potion>>,
+    time: Res<Time>
+) {
+    for (mut transform, mut potion) in &mut query{
+        potion.boom.tick(time.delta());
+        transform.translation.x = f32::cos(potion.boom.elapsed_secs()*1.5)*-250. + potion.x + 250.;
+        transform.translation.y = f32::sin(potion.boom.elapsed_secs()*3.5)*150. + potion.y;
+        println!("{} {}", transform.translation.x, transform.translation.y);
+        if potion.boom.finished(){
+            potion.x = f32::cos(potion.boom.elapsed_secs()*1.5)*-250. + potion.x + 250.;
+            potion.y = f32::sin(potion.boom.elapsed_secs()*3.5)*150. + potion.y;
+        }
+        // transform.translation.x += time.delta_seconds();
+        // transform.translation.y += particle.y;
+    }
+    // if input.pressed(KeyCode::Space)  {  }
+}
+
+fn potion_boom(
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut Potion), With<Potion>>
+) {
+    for (entity, potion) in &mut query{
+        if potion.boom.finished(){
+            commands.entity(entity).despawn();
+
+            for _ in 0..100{
+                let mut rng = thread_rng();
+                let (rx, ry): (f32, f32) = (rng.gen_range(0.0..10.0) - 5., rng.gen_range(0.0..10.0) - 5.);
+                commands.spawn(SpriteBundle {
+                    sprite: Sprite {
+                        color: Color::Rgba { red: 0., green: 0., blue: 0., alpha: 0.5 },
+                        custom_size: Some(Vec2::new(10., 10.)),
+                        
+                        ..Default::default()
+                    },
+                    transform: Transform{
+                        translation: Vec3::new(potion.x, potion.y, 0.),
+                        ..Default::default()
+                    },  
+                    ..Default::default()
+                }).insert(Particle{x: rx, y: ry, life: Timer::from_seconds(2., TimerMode::Once)});
+            }
+        }
+    }
 }
