@@ -70,6 +70,10 @@ fn player_movement(
                 custom_size: Some(Vec2::new(10., 10.)),
                 ..Default::default()
             },
+            transform: Transform{
+                translation: Vec3::new(transform.translation.x, transform.translation.y, 0.),
+                ..Default::default()
+            },
             ..Default::default()
         }).insert(Potion {
             boom: Timer::from_seconds(1., TimerMode::Once),
@@ -118,6 +122,7 @@ fn potion_movement(
         potion.boom.tick(time.delta());
         transform.translation.x = f32::cos(potion.boom.elapsed_secs()*1.5)*-250. + potion.x + 250.;
         transform.translation.y = f32::sin(potion.boom.elapsed_secs()*3.5)*150. + potion.y;
+        transform.rotate(Quat::from_rotation_z(f32::sin(potion.boom.elapsed_secs()*3.5)*150.));
         if potion.boom.finished(){
             potion.x = f32::cos(potion.boom.elapsed_secs()*1.5)*-250. + potion.x + 250.;
             potion.y = f32::sin(potion.boom.elapsed_secs()*3.5)*150. + potion.y;
